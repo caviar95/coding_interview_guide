@@ -10,10 +10,10 @@ include_directories(../googletest)
 enable_testing()
 
 # 添加测试可执行文件
-add_executable(test_get_min test_get_min.cpp)
+add_executable(test_case test_get_min.cpp test_queue_by_stack.cpp)
 
 # 链接 Google Test 库
-target_link_libraries(test_get_min gtest gtest_main)
+target_link_libraries(test_case gtest gtest_main)
 
 # 添加测试
-add_test(NAME GetMinStackTest COMMAND test_get_min)
+add_test(NAME GetMinStackTest COMMAND test_case)

@@ -58,8 +58,3 @@ TEST(MyStack2Test, EmptyStack) {
     EXPECT_EQ(stack.pop(), -1);
     EXPECT_EQ(stack.getMin(), -1);
 }
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
