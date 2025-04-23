@@ -1,74 +1,130 @@
 #include "dog_cat_queue.hpp"
 #include "gtest/gtest.h"
 
-// 测试DogCatQueue类的添加和轮询功能
-TEST(DogCatQueueTest, AddAndPoll) {
-    DogCatQueue queue;
-
-    // 添加一只狗和一只猫
-    Dog dog("Buddy");
-    Cat cat("Whiskers");
-    queue.add(dog);
-    queue.add(cat);
-
-    // 轮询所有宠物，应该首先返回计数较小的那个（假设按添加顺序，这里应该是狗）
-    Pet polledPet = queue.pollAll();
-    EXPECT_EQ(polledPet.getPetType(), PetType::DOG);
-    EXPECT_EQ(polledPet.getName(), "Buddy");
-
-    // 再次轮询，应该返回猫
-    polledPet = queue.pollAll();
-    EXPECT_EQ(polledPet.getPetType(), PetType::CAT);
-    EXPECT_EQ(polledPet.getName(), "Whiskers");
-
-    // 队列现在应该为空
-    EXPECT_TRUE(queue.isEmpty());
+TEST(DogCatQueueTest, BasicEnqueueDequeue) {
+    DogCatQueue q;
+    
+    // 验证空队列状态
+    EXPECT_TRUE(q.empty());
+    EXPECT_TRUE(q.dogs_empty());
+    EXPECT_TRUE(q.cats_empty());
+    
+    // 添加宠物
+    q.add(Pet(PetType::DOG, "Buddy"));
+    q.add(Pet(PetType::CAT, "Whiskers"));
+    
+    // 验证非空状态
+    EXPECT_FALSE(q.empty());
+    EXPECT_FALSE(q.dogs_empty());
+    EXPECT_FALSE(q.cats_empty());
+    
+    // 验证出队顺序
+    auto first = q.poll();
+    EXPECT_EQ(first.type(), PetType::DOG);
+    EXPECT_EQ(first.name(), "Buddy");
+    
+    auto second = q.poll();
+    EXPECT_EQ(second.type(), PetType::CAT);
+    EXPECT_EQ(second.name(), "Whiskers");
 }
 
-// 测试仅添加狗并轮询狗的功能
-TEST(DogCatQueueTest, AddDogAndPollDog) {
-    DogCatQueue queue;
-
-    // 添加两只狗
-    Dog dog1("Rex");
-    Dog dog2("Fido");
-    queue.add(dog1);
-    queue.add(dog2);
-
-    // 轮询狗，应该返回第一只添加的狗
-    Dog polledDog = queue.pollDog();
-    EXPECT_EQ(polledDog.getPetType(), PetType::DOG);
-    EXPECT_EQ(polledDog.getName(), "Rex");
-
-    // 再次轮询狗，应该返回第二只添加的狗
-    polledDog = queue.pollDog();
-    EXPECT_EQ(polledDog.getPetType(), PetType::DOG);
-    EXPECT_EQ(polledDog.getName(), "Fido");
-
-    // 狗队列现在应该为空
-    EXPECT_TRUE(queue.isDogEmpty());
+TEST(DogCatQueueTest, TypeSpecificDequeue) {
+    DogCatQueue q;
+    
+    q.add(Pet(PetType::DOG, "Rex"));
+    q.add(Pet(PetType::CAT, "Tom"));
+    q.add(Pet(PetType::DOG, "Fido"));
+    
+    // 单独出队狗
+    auto dog1 = q.poll_dog();
+    EXPECT_EQ(dog1.name(), "Rex");
+    
+    // 单独出队猫
+    auto cat = q.poll_cat();
+    EXPECT_EQ(cat.name(), "Tom");
+    
+    // 混合出队
+    auto dog2 = q.poll();
+    EXPECT_EQ(dog2.name(), "Fido");
 }
 
-// 测试仅添加猫并轮询猫的功能
-TEST(DogCatQueueTest, AddCatAndPollCat) {
-    DogCatQueue queue;
+TEST(DogCatQueueTest, TimestampOrdering) {
+    DogCatQueue q;
+    
+    // 验证时间戳顺序
+    q.add(Pet(PetType::CAT, "C1"));
+    q.add(Pet(PetType::DOG, "D1"));
+    q.add(Pet(PetType::CAT, "C2"));
+    
+    EXPECT_EQ(q.poll().name(), "C1");  // 最早入队
+    EXPECT_EQ(q.poll().name(), "D1");
+    EXPECT_EQ(q.poll().name(), "C2");
+}
 
-    // 添加两只猫
-    Cat cat1("Mittens");
-    Cat cat2("Tom");
-    queue.add(cat1);
-    queue.add(cat2);
+TEST(DogCatQueueTest, ExceptionHandling) {
+    DogCatQueue q;
+    
+    // 空队列异常
+    EXPECT_THROW(q.poll(), std::runtime_error);
+    EXPECT_THROW(q.poll_dog(), std::runtime_error);
+    EXPECT_THROW(q.poll_cat(), std::runtime_error);
+    
+    // 无效类型异常
+    Pet invalid_pet(static_cast<PetType>(2), "Unknown");
+    EXPECT_THROW(q.add(std::move(invalid_pet)), std::invalid_argument);
+}
 
-    // 轮询猫，应该返回第一只添加的猫
-    Cat polledCat = queue.pollCat();
-    EXPECT_EQ(polledCat.getPetType(), PetType::CAT);
-    EXPECT_EQ(polledCat.getName(), "Mittens");
+TEST(DogCatQueueTest, MoveSemantics) {
+    DogCatQueue q;
+    
+    // 验证移动语义
+    Pet dog(PetType::DOG, "Rover");
+    q.add(std::move(dog));
+    
+    // 原始对象不应再被使用（这里只是演示测试方法）
+    // 实际使用中应避免访问已移动对象
+    
+    auto dequeued = q.poll_dog();
+    EXPECT_EQ(dequeued.name(), "Rover");
+}
 
-    // 再次轮询猫，应该返回第二只添加的猫
-    polledCat = queue.pollCat();
-    EXPECT_EQ(polledCat.getPetType(), PetType::CAT);
-    EXPECT_EQ(polledCat.getName(), "Tom");
+TEST(DogCatQueueTest, MixedOperations) {
+    DogCatQueue q;
+    
+    // 复杂操作序列
+    q.add(Pet(PetType::DOG, "D1"));
+    q.add(Pet(PetType::CAT, "C1"));
+    q.add(Pet(PetType::CAT, "C2"));
+    
+    EXPECT_EQ(q.poll_cat().name(), "C1");
+    EXPECT_EQ(q.poll().name(), "D1");  // 最早剩余元素
+    
+    q.add(Pet(PetType::DOG, "D2"));
+    EXPECT_EQ(q.poll().name(), "C2");  // 时间戳早于D2
+}
 
-    // 猫队列现在应该为空
-    EXPECT_TRUE(queue.isCatEmpty());
+TEST(DogCatQueueTest, StateTransitions) {
+    DogCatQueue q;
+    
+    // 初始状态验证
+    EXPECT_TRUE(q.empty());
+    
+    // 添加狗
+    q.add(Pet(PetType::DOG, "Buddy"));
+    EXPECT_FALSE(q.empty());
+    EXPECT_FALSE(q.dogs_empty());
+    EXPECT_TRUE(q.cats_empty());
+    
+    // 添加猫
+    q.add(Pet(PetType::CAT, "Mittens"));
+    EXPECT_FALSE(q.cats_empty());
+    
+    // 清空狗队列
+    q.poll_dog();
+    EXPECT_TRUE(q.dogs_empty());
+    EXPECT_FALSE(q.empty());
+    
+    // 清空猫队列
+    q.poll_cat();
+    EXPECT_TRUE(q.empty());
 }

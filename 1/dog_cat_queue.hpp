@@ -2,135 +2,89 @@
 
 #include <string>
 #include <queue>
+#include <stdexcept>
+#include <utility>
+#include <cstdint>
 
-using namespace std;
+enum class PetType { DOG, CAT };
 
-enum class PetType {DEFAULT, DOG, CAT};
 class Pet {
-    PetType type;
-    string name;
-
+    PetType type_;
+    std::string name_;
+    
 public:
-    Pet(PetType t = PetType::DEFAULT, const string &petName = "") : type(t), name(petName) {}
+    Pet(PetType type, std::string name) 
+        : type_(type), name_(std::move(name)) {}
+    
+    PetType type() const noexcept { return type_; }
+    const std::string& name() const noexcept { return name_; }
 
-    Pet(const Pet &pet) {
-        type = pet.type;
-        name = pet.name;
-    }
-
-    PetType getPetType() const {
-        return type;
-    }
-
-    string getName() const {
-        return name;
-    }
+    // 支持移动语义
+    Pet(Pet&&) = default;
+    Pet& operator=(Pet&&) = default;
+    
+    // 禁用拷贝（根据需要开放）
+    Pet(const Pet&) = delete;
+    Pet& operator=(const Pet&) = delete;
 };
 
-class Dog : public Pet {
+class TimestampPet {
+    Pet pet_;
+    uint64_t timestamp_;
+    
 public:
-    Dog(const string &name = "") : Pet(PetType::DOG, name) {}
-};
-
-class Cat : public Pet {
-public:
-    Cat(const string &name = "") : Pet(PetType::CAT, name) {}
-};
-
-class PetEnterQueue {
-    Pet pet;
-    long count;
-
-public:
-    PetEnterQueue(Pet pet, long cnt) : pet(pet), count(cnt) {}
-
-    long getCount() const {
-        return count;
-    }
-
-    Pet getPet() const {
-        return pet;
-    }
-
-    PetType getPetType() const {
-        return pet.getPetType();
-    }
+    TimestampPet(Pet&& pet, uint64_t ts)
+        : pet_(std::move(pet)), timestamp_(ts) {}
+    
+    uint64_t timestamp() const noexcept { return timestamp_; }
+    const Pet& pet() const noexcept { return pet_; }
+    PetType type() const noexcept { return pet_.type(); }
 };
 
 class DogCatQueue {
-    queue<PetEnterQueue> dogQ_;
-    queue<PetEnterQueue> catQ_;
-    long count_{};
+    std::queue<TimestampPet> dogs_;
+    std::queue<TimestampPet> cats_;
+    uint64_t counter_ = 0;
+    
+    // 通用出队模板
+    template <PetType T>
+    Pet poll_impl(std::queue<TimestampPet>& q) {
+        if (q.empty()) throw std::runtime_error("Queue empty");
+        
+        auto entry = std::move(q.front());
+        q.pop();
+        return std::move(const_cast<Pet&>(entry.pet()));
+    }
 
 public:
-    DogCatQueue() {}
-
-    void add(const Pet &pet) {
-        if (pet.getPetType() == PetType::DOG) {
-            dogQ_.push(PetEnterQueue(pet, count_++));
-        } else if (pet.getPetType() == PetType::CAT) {
-            catQ_.push(PetEnterQueue(pet, count_++));
+    void add(Pet&& pet) {
+        switch (pet.type()) {
+        case PetType::DOG:
+            dogs_.emplace(std::move(pet), counter_++);
+            break;
+        case PetType::CAT:
+            cats_.emplace(std::move(pet), counter_++);
+            break;
+        default:
+            throw std::invalid_argument("Invalid pet type");
         }
     }
 
-    Pet pollAll() {
-        if (!dogQ_.empty() && !catQ_.empty()) {
-            if (dogQ_.front().getCount() < catQ_.front().getCount()) {
-                auto pet = dogQ_.front().getPet();
-                dogQ_.pop();
-                return pet;
-            }
-            auto pet = catQ_.front().getPet();
-            catQ_.pop();
-            return pet;    
-        }
-
-        if (!dogQ_.empty()) {
-            auto pet = dogQ_.front().getPet();
-            dogQ_.pop();
-            return pet;
-        }
-
-        if (!catQ_.empty()) {
-            auto pet = catQ_.front().getPet();
-            catQ_.pop();
-            return pet;  
-        }
-
-        return {};
+    // 统一出队接口
+    Pet poll() {
+        if (empty()) throw std::runtime_error("All queues empty");
+        
+        const auto dog_ts = dogs_.empty() ? UINT64_MAX : dogs_.front().timestamp();
+        const auto cat_ts = cats_.empty() ? UINT64_MAX : cats_.front().timestamp();
+        
+        return dog_ts < cat_ts ? poll_dog() : poll_cat();
     }
 
-    Dog pollDog() {
-        if (!dogQ_.empty()) {
-            auto pet = dogQ_.front().getPet();
-            Dog dog(pet.getName());
-            dogQ_.pop();
-            return dog;
-        }
+    Pet poll_dog() { return poll_impl<PetType::DOG>(dogs_); }
+    Pet poll_cat() { return poll_impl<PetType::CAT>(cats_); }
 
-        return {};
-    }
-
-    Cat pollCat() {
-        if (!catQ_.empty()) {
-            auto pet = catQ_.front().getPet();
-            Cat cat(pet.getName());
-            catQ_.pop();
-            return cat;
-        }
-
-        return {};
-    }
-
-    bool isEmpty() {
-        return dogQ_.empty() && catQ_.empty();
-    }
-
-    bool isDogEmpty() {
-        return dogQ_.empty();
-    }
-
-    bool isCatEmpty() {
-        return catQ_.empty();
-    }
+    // 状态查询（添加noexcept）
+    bool empty() const noexcept { return dogs_.empty() && cats_.empty(); }
+    bool dogs_empty() const noexcept { return dogs_.empty(); }
+    bool cats_empty() const noexcept { return cats_.empty(); }
 };
