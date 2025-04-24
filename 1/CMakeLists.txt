@@ -17,6 +17,7 @@ add_executable(test_case
             test_dog_cat_queue.cpp
             test_get_max_windows.cpp
             test_monotonic_stack.cpp
+            test_sub_matrix.cpp
 )
 
 # 链接 Google Test 库
